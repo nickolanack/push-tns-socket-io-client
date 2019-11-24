@@ -16,7 +16,5 @@
     "url": "https://github.com/nickolanack/push-tns-socket-io-client/issues"
   },
   "homepage": "https://github.com/nickolanack/push-tns-socket-io-client#readme",
-  "dependencies": {
-   
-  }
+  "dependencies": {}
 }

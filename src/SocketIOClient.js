@@ -1,18 +1,29 @@
 var SocketIOClient = (function() {
 
+	var _credentials={};
+
 
 	var client = function(url) {
 
 		var me = this;
 		me._connected=false;
-
-		SocketIO = require('nativescript-socket.io');
+	
+		var SocketIO = require('nativescript-socket.io');
 
 		var socket = SocketIO.connect(url, {});
 
 		socket.on('disconnect', function() {
+			me._connected=false;
+			console.log('disconnected');
+			me._socket.once('connect',function(){
 
-			console.log('disconnected')
+        		//resubscribe!
+
+        		Object.keys(me.subscriptions).forEach(function(channel){
+        			me._socket.emit('subscribe', channel);
+        		});
+        		
+        	})
 
 		});
 
@@ -43,9 +54,30 @@ var SocketIOClient = (function() {
 	};
 	client.prototype.connect = function(credentials, fn) {
 		var me = this;
-	
-		console.log('auth');
-		me._socket.emit('authenticate', credentials, fn);
+		
+		var auth=function(){
+			console.log('auth');
+			me._socket.emit('authenticate', credentials, function(success){
+				if(fn){
+					
+					if(success){
+						me._socket.emit('whomai', credentials, function(myid){
+							me._id=myid;
+							fn.apply(null, arguments);
+						});
+						return;
+					}
+					fn.apply(null, arguments);
+					
+				}
+			});
+		}
+
+		if(me._connected){
+			auth();
+		}
+
+		me._socket.on('connect', auth);
 
 		me.subscriptions = {};
 
@@ -54,10 +86,25 @@ var SocketIOClient = (function() {
 	client.prototype.emit = function(channel, event, data, fn) {
 		var me = this;
 		console.log('emit');
-		me._socket.emit('emit', {channel:channel+'/'+event, data:data}, fn);
+		var message={channel:channel+'/'+event, data:data};
+
+		if(_credentials[channel]){
+			message.credentials=_credentials[channel];
+		}
+
+
+		me._socket.emit('emit', message, fn);
 
 		return me
 	};
+
+	client.prototype.setChannelCredentials = function(channel, credentials) {
+		var me = this;
+		_credentials[channel]=credentials;
+
+		return me
+	};
+
 	client.prototype.subscribe = function(channel, event, callback) {
 		var me = this;
 
@@ -70,7 +117,9 @@ var SocketIOClient = (function() {
 		}
 
 		if (!me.subscriptions[channel]) {
-			me._socket.emit('subscribe', channel);
+			me._socket.emit('subscribe', channel, function(bool){
+				console.log("subscription callback: "+JSON.stringify([bool]));
+			});
 			me.subscriptions[channel] = 0;
 		}
 		me.subscriptions[channel]++;
@@ -116,7 +165,7 @@ var SocketIOClient = (function() {
 	};
 	client.prototype.getId = function() {
 		var me = this;
-		return me._socket.id;
+		return me._id;
 	};
 
 
